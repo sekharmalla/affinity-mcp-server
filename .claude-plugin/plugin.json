@@ -1,0 +1,11 @@
+{
+  "name": "affinity-mcp-server",
+  "description": "Control Affinity creative suite on macOS with AI — 23 MCP tools + design workflow skill",
+  "author": {
+    "name": "Sekhar Malla",
+    "url": "https://github.com/sekharmalla"
+  },
+  "repository": "https://github.com/sekharmalla/affinity-mcp-server",
+  "license": "MIT",
+  "keywords": ["affinity", "design", "macos", "creative", "automation"]
+}

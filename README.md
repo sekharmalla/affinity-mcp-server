@@ -53,6 +53,20 @@ bun install
 bun run start
 ```
 
+## Install as Claude Code Plugin
+
+The easiest way to get started with Claude Code — one command, no manual config:
+
+```bash
+claude plugin add /path/to/affinity-mcp-server
+```
+
+This automatically:
+- Registers the MCP server (all 23 tools available immediately)
+- Installs the **affinity-design skill** — workflow guidance that teaches Claude how to orchestrate the tools for real design tasks (create posters, export files, navigate menus, etc.)
+
+The skill is the key value-add: the MCP tools are low-level primitives (click here, type this), but the skill provides high-level workflow knowledge (how to create a poster, how to export for web, how to navigate Affinity's UI patterns).
+
 ## Configuration
 
 Add the server to your AI client's MCP configuration:

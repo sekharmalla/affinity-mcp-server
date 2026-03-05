@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "affinity-mcp-server": {
+      "command": "bun",
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/index.ts"]
+    }
+  }
+}
