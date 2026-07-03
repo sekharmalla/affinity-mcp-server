@@ -499,7 +499,7 @@ server.tool(
     keystroke("w", ["command"]);
     await sleep(500);
     try {
-      systemEvents(`click button "Don\\\'t Save" of sheet 1 of window 1`);
+      systemEvents(`click button "Don't Save" of sheet 1 of window 1`);
     } catch { /* no save dialog */ }
     await sleep(500);
     return { content: [{ type: "text", text: `Closed${save ? " (saved)" : ""}.` }] };
