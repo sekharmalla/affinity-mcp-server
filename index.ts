@@ -503,11 +503,18 @@ server.tool(
     save: z.boolean().default(false).describe("Save before closing"),
   },
   async ({ save }) => {
+    // Use the File menu, not ⌘S / ⌘W: menu clicks are addressed to the
+    // Affinity process directly, and Affinity ignores a synthetic ⌘W even
+    // when it is frontmost.
     if (save) {
-      keystroke("s", ["command"]);
+      systemEvents(
+        `click menu item "Save" of menu 1 of menu bar item "File" of menu bar 1`
+      );
       await sleep(1000);
     }
-    keystroke("w", ["command"]);
+    systemEvents(
+      `click menu item "Close" of menu 1 of menu bar item "File" of menu bar 1`
+    );
     await sleep(500);
     try {
       systemEvents(`click button "Don't Save" of sheet 1 of window 1`);
