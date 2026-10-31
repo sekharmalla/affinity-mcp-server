@@ -490,10 +490,20 @@ server.tool(
     outputPath: z.string().default("/tmp/affinity_screenshot.png").describe("Output path"),
   },
   async ({ outputPath }) => {
-    // Capture the frontmost Affinity window
-    execSync(`osascript -e 'tell application "Affinity" to activate'`);
-    await sleep(500);
-    execSync(`screencapture -w -o "${outputPath}" 2>/dev/null || screencapture "${outputPath}"`);
+    // `screencapture -w` is interactive: it waits for the user to click a
+    // window. Instead, look up Affinity's largest on-screen window through
+    // CoreGraphics and capture it by ID (-l), silently (-x), without shadow
+    // (-o). This works even when Affinity is behind other windows.
+    const jxa = `ObjC.import('CoreGraphics');
+const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, 0)));
+const w = list.filter(x => x.kCGWindowOwnerName === 'Affinity' && x.kCGWindowLayer === 0)
+  .sort((a, b) => b.kCGWindowBounds.Width * b.kCGWindowBounds.Height - a.kCGWindowBounds.Width * a.kCGWindowBounds.Height)[0];
+w ? String(w.kCGWindowNumber) : '';`;
+    const id = execSync(`osascript -l JavaScript`, { input: jxa }).toString().trim();
+    if (!/^\d+$/.test(id)) {
+      return { content: [{ type: "text", text: "No on-screen Affinity window found." }], isError: true };
+    }
+    execSync(`screencapture -x -o -l${id} "${outputPath}"`);
     return { content: [{ type: "text", text: `Screenshot: ${outputPath}` }] };
   }
 );
