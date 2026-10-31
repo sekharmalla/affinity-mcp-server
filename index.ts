@@ -44,7 +44,9 @@ function systemEvents(action: string): string {
 // System Events `keystroke` / `key code` ignore the `tell process` target and
 // always type into the FRONTMOST app, so a ⌘W meant for Affinity can close
 // whatever window has focus (e.g. the terminal running the MCP client).
-// Bring Affinity forward, then refuse to send keys if it still isn't frontmost.
+// Bring Affinity forward once, then check up to 20 times, 0.1 s apart, whether
+// macOS has finished the switch; stop at the first check that passes. If
+// Affinity still isn't frontmost after ~2 s, throw instead of sending the keys.
 function sendKeysToAffinity(action: string): string {
   return systemEvents(`
         set frontmost to true
