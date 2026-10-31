@@ -41,12 +41,27 @@ function systemEvents(action: string): string {
   `);
 }
 
+// System Events `keystroke` / `key code` ignore the `tell process` target and
+// always type into the FRONTMOST app, so a ⌘W meant for Affinity can close
+// whatever window has focus (e.g. the terminal running the MCP client).
+// Bring Affinity forward, then refuse to send keys if it still isn't frontmost.
+function sendKeysToAffinity(action: string): string {
+  return systemEvents(`
+        set frontmost to true
+        repeat 20 times
+          if frontmost then exit repeat
+          delay 0.1
+        end repeat
+        if not frontmost then error "Affinity is not frontmost; refusing to send keys to another app."
+        ${action}`);
+}
+
 function keystroke(key: string, modifiers: string[] = []): string {
   const modStr =
     modifiers.length > 0
       ? ` using {${modifiers.map((m) => `${m} down`).join(", ")}}`
       : "";
-  return systemEvents(`keystroke "${key}"${modStr}`);
+  return sendKeysToAffinity(`keystroke "${key}"${modStr}`);
 }
 
 function keyCode(code: number, modifiers: string[] = []): string {
@@ -54,7 +69,7 @@ function keyCode(code: number, modifiers: string[] = []): string {
     modifiers.length > 0
       ? ` using {${modifiers.map((m) => `${m} down`).join(", ")}}`
       : "";
-  return systemEvents(`key code ${code}${modStr}`);
+  return sendKeysToAffinity(`key code ${code}${modStr}`);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -335,13 +350,9 @@ server.tool(
     text: z.string().describe("Text to type"),
   },
   async ({ text }) => {
-    osascript(`
-      tell application "System Events"
-        tell process "${PROCESS_NAME}"
-          keystroke "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
-        end tell
-      end tell
-    `);
+    sendKeysToAffinity(
+      `keystroke "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+    );
     await sleep(300);
     return { content: [{ type: "text", text: `Typed: "${text}"` }] };
   }
