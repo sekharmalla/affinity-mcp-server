@@ -41,12 +41,29 @@ function systemEvents(action: string): string {
   `);
 }
 
+// System Events `keystroke` / `key code` ignore the `tell process` target and
+// always type into the FRONTMOST app, so a ⌘W meant for Affinity can close
+// whatever window has focus (e.g. the terminal running the MCP client).
+// Bring Affinity forward once, then check up to 20 times, 0.1 s apart, whether
+// macOS has finished the switch; stop at the first check that passes. If
+// Affinity still isn't frontmost after ~2 s, throw instead of sending the keys.
+function sendKeysToAffinity(action: string): string {
+  return systemEvents(`
+        set frontmost to true
+        repeat 20 times
+          if frontmost then exit repeat
+          delay 0.1
+        end repeat
+        if not frontmost then error "Affinity is not frontmost; refusing to send keys to another app."
+        ${action}`);
+}
+
 function keystroke(key: string, modifiers: string[] = []): string {
   const modStr =
     modifiers.length > 0
       ? ` using {${modifiers.map((m) => `${m} down`).join(", ")}}`
       : "";
-  return systemEvents(`keystroke "${key}"${modStr}`);
+  return sendKeysToAffinity(`keystroke "${key}"${modStr}`);
 }
 
 function keyCode(code: number, modifiers: string[] = []): string {
@@ -54,7 +71,7 @@ function keyCode(code: number, modifiers: string[] = []): string {
     modifiers.length > 0
       ? ` using {${modifiers.map((m) => `${m} down`).join(", ")}}`
       : "";
-  return systemEvents(`key code ${code}${modStr}`);
+  return sendKeysToAffinity(`key code ${code}${modStr}`);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -335,13 +352,9 @@ server.tool(
     text: z.string().describe("Text to type"),
   },
   async ({ text }) => {
-    osascript(`
-      tell application "System Events"
-        tell process "${PROCESS_NAME}"
-          keystroke "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
-        end tell
-      end tell
-    `);
+    sendKeysToAffinity(
+      `keystroke "${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+    );
     await sleep(300);
     return { content: [{ type: "text", text: `Typed: "${text}"` }] };
   }
@@ -477,10 +490,20 @@ server.tool(
     outputPath: z.string().default("/tmp/affinity_screenshot.png").describe("Output path"),
   },
   async ({ outputPath }) => {
-    // Capture the frontmost Affinity window
-    execSync(`osascript -e 'tell application "Affinity" to activate'`);
-    await sleep(500);
-    execSync(`screencapture -w -o "${outputPath}" 2>/dev/null || screencapture "${outputPath}"`);
+    // `screencapture -w` is interactive: it waits for the user to click a
+    // window. Instead, look up Affinity's largest on-screen window through
+    // CoreGraphics and capture it by ID (-l), silently (-x), without shadow
+    // (-o). This works even when Affinity is behind other windows.
+    const jxa = `ObjC.import('CoreGraphics');
+const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, 0)));
+const w = list.filter(x => x.kCGWindowOwnerName === 'Affinity' && x.kCGWindowLayer === 0)
+  .sort((a, b) => b.kCGWindowBounds.Width * b.kCGWindowBounds.Height - a.kCGWindowBounds.Width * a.kCGWindowBounds.Height)[0];
+w ? String(w.kCGWindowNumber) : '';`;
+    const id = execSync(`osascript -l JavaScript`, { input: jxa }).toString().trim();
+    if (!/^\d+$/.test(id)) {
+      return { content: [{ type: "text", text: "No on-screen Affinity window found." }], isError: true };
+    }
+    execSync(`screencapture -x -o -l${id} "${outputPath}"`);
     return { content: [{ type: "text", text: `Screenshot: ${outputPath}` }] };
   }
 );
@@ -492,11 +515,18 @@ server.tool(
     save: z.boolean().default(false).describe("Save before closing"),
   },
   async ({ save }) => {
+    // Use the File menu, not ⌘S / ⌘W: menu clicks are addressed to the
+    // Affinity process directly, and Affinity ignores a synthetic ⌘W even
+    // when it is frontmost.
     if (save) {
-      keystroke("s", ["command"]);
+      systemEvents(
+        `click menu item "Save" of menu 1 of menu bar item "File" of menu bar 1`
+      );
       await sleep(1000);
     }
-    keystroke("w", ["command"]);
+    systemEvents(
+      `click menu item "Close" of menu 1 of menu bar item "File" of menu bar 1`
+    );
     await sleep(500);
     try {
       systemEvents(`click button "Don't Save" of sheet 1 of window 1`);
